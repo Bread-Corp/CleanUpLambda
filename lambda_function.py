@@ -65,6 +65,27 @@ def lambda_handler(event, context):
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        # --- Step 1: Update Stale 'Open' Tenders ---
+        logger.info("Executing status update: Setting expired 'Open' tenders to 'Closed'...")
+        
+        # This query finds tenders marked 'Open' whose closing date has passed
+        # and updates their status to 'Closed'.
+        update_sql = """
+        UPDATE dbo.BaseTender
+        SET Status = 'Closed'
+        OUTPUT inserted.TenderID
+        WHERE Status = 'Open' AND closingDate < GETDATE();
+        """
+        cursor.execute(update_sql)
+        updated_rows = cursor.fetchall()
+        updated_count = len(updated_rows)
+        
+        if updated_count > 0:
+            logger.info(f"Successfully updated {updated_count} tenders from 'Open' to 'Closed'.")
+        else:
+            logger.info("No stale 'Open' tenders found to update.")
+
+        # --- Step 2: Delete Old Tenders ---
         logger.info("Executing cleanup query: Deleting tenders older than 1 month...")
 
         # SQL query to delete old tenders from the base table
@@ -91,9 +112,12 @@ def lambda_handler(event, context):
         else:
             logger.info("No old tenders found matching the criteria. No records deleted.")
 
+        # --- Final Success Response ---
+        success_message = f"Cleanup successful. Updated {updated_count} tender statuses. Deleted {deleted_count} old tenders."
+        logger.info(success_message)
         return {
             'statusCode': 200,
-            'body': json.dumps(f'Cleanup successful. Deleted {deleted_count} old tenders.')
+            'body': json.dumps(success_message)
         }
 
     except pymssql.Error as db_err:
