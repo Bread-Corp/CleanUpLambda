@@ -71,78 +71,374 @@ Our cleanup process follows a methodical, fail-safe approach:
 4. **🏗️ Automated Cascade**: Database handles related record cleanup via `ON DELETE CASCADE` foreign key constraints
 5. **📊 Performance Reporting**: Logs cleanup metrics and returns detailed success/error responses
 
-## 🔧 Setup & Deployment
+## 📦 Deployment
 
-Ready to deploy your digital cleaning crew? Let's set up the ultimate database maintenance system! 🚀
+This section covers three deployment methods for the Tender Cleanup Lambda Function. Choose the method that best fits your workflow and infrastructure preferences.
 
-### 📋 Prerequisites
-- AWS Account with Lambda, RDS, and EventBridge permissions 🔑
-- RDS SQL Server with properly configured CASCADE constraints 🗄️
-- Dedicated cleanup database user with minimal permissions 👤
-- Pre-built `pymssql` Lambda Layer for Python 3.9 📦
+### 🛠️ Prerequisites
 
-### 🏗️ Deployment Steps
+Before deploying, ensure you have:
+- AWS CLI configured with appropriate credentials 🔑
+- AWS SAM CLI installed (`pip install aws-sam-cli`)
+- Python 3.9 runtime support in your target region
+- Access to AWS Lambda, RDS, and CloudWatch Logs services ☁️
+- Analytics layer dependencies for database connectivity
 
-#### 1. **🔐 Create Security Role**
+### 🎯 Method 1: AWS Toolkit Deployment
+
+Deploy directly through your IDE using the AWS Toolkit extension.
+
+#### Setup Steps:
+1. **Install AWS Toolkit** in your IDE (VS Code, IntelliJ, etc.)
+2. **Configure AWS Profile** with your credentials
+3. **Open Project** containing `lambda_function.py`
+
+#### Deploy Process:
+1. **Right-click** on `lambda_function.py` in your IDE
+2. **Select** "Deploy Lambda Function" from AWS Toolkit menu
+3. **Configure Deployment**:
+   - Function Name: `TenderCleanupHandler`
+   - Runtime: `python3.9`
+   - Handler: `lambda_function.lambda_handler`
+   - Memory: `128 MB`
+   - Timeout: `60 seconds`
+4. **Add Layers** manually after deployment:
+   - analytics-layer (for database connectivity)
+5. **Set Environment Variables**:
+   ```
+   DB_ENDPOINT=tender-tool-db.c2hq4seoidxc.us-east-1.rds.amazonaws.com
+   DB_NAME=tendertool_db
+   DB_PASSWORD=T3nder$Tool_DB_2025!
+   DB_USER=CleanupAppUser
+   ```
+6. **Configure IAM Permissions** for CloudWatch Logs
+
+#### Post-Deployment:
+- Test the function using the AWS Toolkit test feature
+- Monitor logs through CloudWatch integration
+- Verify database connectivity and cleanup operations
+
+### 🚀 Method 2: SAM Deployment
+
+Use AWS SAM for infrastructure-as-code deployment with the provided template.
+
+#### Initial Setup:
 ```bash
-# Create IAM role for Lambda execution
-Role Name: TenderCleanupRole
-Policies: 
-  - AWSLambdaBasicExecutionRole (CloudWatch Logs)
-  - Custom database access policy (if needed)
+# Install AWS SAM CLI
+pip install aws-sam-cli
+
+# Verify installation
+sam --version
 ```
 
-#### 2. **⚡ Deploy the Cleanup Function**
+#### Create Required Layer Directory:
+Since the template references an analytics layer not included in the repository, create it:
+
+```bash
+# Create analytics layer directory
+mkdir -p analytics-layer/python
+
+# Install required database connectivity packages
+pip install pymssql -t analytics-layer/python/
+pip install sqlalchemy -t analytics-layer/python/
+pip install pyodbc -t analytics-layer/python/
+```
+
+#### Build and Deploy:
+```bash
+# Build the SAM application
+sam build
+
+# Deploy with guided configuration (first time)
+sam deploy --guided
+
+# Follow the prompts:
+# Stack Name: tender-cleanup-lambda-stack
+# AWS Region: us-east-1 (or your preferred region)
+# Confirm changes before deploy: Y
+# Allow SAM to create IAM roles: Y
+# Save parameters to samconfig.toml: Y
+```
+
+#### Environment Variables Setup:
+The template already includes the required environment variables:
+
 ```yaml
-Function Configuration:
-  Name: TenderCleanupHandler
-  Runtime: Python 3.9
-  Architecture: x86_64
-  Timeout: 60 seconds (adjust based on data volume)
-  Memory: 128 MB (sufficient for most cleanup operations)
+# Already configured in template.yml
+Environment:
+  Variables:
+    DB_ENDPOINT: tender-tool-db.c2hq4seoidxc.us-east-1.rds.amazonaws.com
+    DB_NAME: tendertool_db
+    DB_PASSWORD: T3nder$Tool_DB_2025!
+    DB_USER: CleanupAppUser
 ```
 
-#### 3. **🗄️ Configure Database Access**
+#### Subsequent Deployments:
+```bash
+# Quick deployment after initial setup
+sam build && sam deploy
+```
+
+#### Local Testing with SAM:
+```bash
+# Test function locally with environment variables
+sam local invoke TenderCleanupHandler
+
+# The function will use the environment variables from template.yml
+```
+
+#### SAM Deployment Advantages:
+- ✅ Complete infrastructure management
+- ✅ Automatic layer creation and management
+- ✅ Environment variables defined in template
+- ✅ IAM permissions configured
+- ✅ Easy rollback capabilities
+- ✅ CloudFormation integration
+
+### 🔄 Method 3: Workflow Deployment (CI/CD)
+
+Automated deployment using GitHub Actions workflow for production environments.
+
+#### Setup Requirements:
+1. **GitHub Repository Secrets**:
+   ```
+   AWS_ACCESS_KEY_ID: Your AWS access key
+   AWS_SECRET_ACCESS_KEY: Your AWS secret key
+   AWS_REGION: us-east-1 (or your target region)
+   ```
+
+2. **Pre-existing Lambda Function**: The workflow updates an existing function, so deploy initially using Method 1 or 2.
+
+#### Deployment Process:
+1. **Create Release Branch**:
+   ```bash
+   # Create and switch to release branch
+   git checkout -b release
+   
+   # Make your changes to lambda_function.py
+   # Commit changes
+   git add .
+   git commit -m "feat: update tender cleanup logic"
+   
+   # Push to trigger deployment
+   git push origin release
+   ```
+
+2. **Automatic Deployment**: The workflow will:
+   - Checkout the code
+   - Configure AWS credentials
+   - Create deployment zip with `lambda_function.py`
+   - Update the existing Lambda function code
+   - Maintain existing configuration (layers, environment variables, etc.)
+
+#### Manual Trigger:
+You can also trigger deployment manually:
+1. Go to **Actions** tab in your GitHub repository
+2. Select **"Deploy Python Lambda to AWS"** workflow
+3. Click **"Run workflow"**
+4. Choose the `release` branch
+5. Click **"Run workflow"** button
+
+#### Workflow Deployment Advantages:
+- ✅ Automated CI/CD pipeline
+- ✅ Consistent deployment process
+- ✅ Audit trail of deployments
+- ✅ Easy rollback to previous commits
+- ✅ No local environment dependencies
+
+### 🔧 Post-Deployment Configuration
+
+Regardless of deployment method, verify the following:
+
+#### Environment Variables Verification:
+Ensure these environment variables are properly set:
+
+```bash
+# Verify environment variables via AWS CLI
+aws lambda get-function-configuration \
+    --function-name TenderCleanupHandler \
+    --query 'Environment.Variables'
+```
+
+Expected output:
+```json
+{
+    "DB_ENDPOINT": "tender-tool-db.c2hq4seoidxc.us-east-1.rds.amazonaws.com",
+    "DB_NAME": "tendertool_db",
+    "DB_PASSWORD": "T3nder$Tool_DB_2025!",
+    "DB_USER": "CleanupAppUser"
+}
+```
+
+#### Database User Setup:
+Ensure the cleanup database user exists and has proper permissions:
+
 ```sql
--- Create dedicated cleanup user with minimal permissions
-CREATE LOGIN CleanupAppUser WITH PASSWORD = 'YourSecurePassword123!';
+-- Connect to your SQL Server RDS instance
+-- Create the cleanup user if not exists
+CREATE LOGIN CleanupAppUser WITH PASSWORD = 'T3nder$Tool_DB_2025!';
 USE tendertool_db;
 CREATE USER CleanupAppUser FOR LOGIN CleanupAppUser;
-GRANT DELETE, SELECT ON dbo.BaseTender TO CleanupAppUser;
+
+-- Grant minimal required permissions
+GRANT DELETE ON dbo.BaseTender TO CleanupAppUser;
+GRANT SELECT ON dbo.BaseTender TO CleanupAppUser;
 ```
 
-#### 4. **⚙️ Environment Setup**
-Configure these critical environment variables:
+#### EventBridge Scheduler Setup (Optional):
+Configure automated cleanup schedules:
 
-| Variable | Purpose | Example |
-|----------|---------|---------|
-| `DB_ENDPOINT` | Database connection point | `tender-db.cluster-xxx.rds.amazonaws.com` |
-| `DB_NAME` | Target database | `tendertool_db` |
-| `DB_USER` | Cleanup service account | `CleanupAppUser` |
-| `DB_PASSWORD` | Secure access credentials | `[YourSecurePassword123!]` |
-
-#### 5. **📦 Attach Dependencies**
-- Attach your pre-built `pymssql-layer` for database connectivity
-- Ensure layer compatibility with Python 3.9 runtime
-
-#### 6. **⏰ Schedule Automation**
 ```bash
-# EventBridge Schedule Examples:
-Daily at 3 AM UTC: cron(0 3 * * ? *)
-Weekly on Sundays: cron(0 3 ? * SUN *)
-Monthly cleanup: cron(0 3 1 * ? *)
+# Create EventBridge rule for daily cleanup at 3 AM UTC
+aws events put-rule \
+    --name "TenderCleanupSchedule" \
+    --schedule-expression "cron(0 3 * * ? *)" \
+    --description "Daily tender database cleanup"
+
+# Add Lambda as target
+aws events put-targets \
+    --rule "TenderCleanupSchedule" \
+    --targets "Id"="1","Arn"="arn:aws:lambda:us-east-1:211635102441:function:TenderCleanupHandler"
+
+# Grant EventBridge permission to invoke Lambda
+aws lambda add-permission \
+    --function-name TenderCleanupHandler \
+    --statement-id "AllowEventBridgeInvoke" \
+    --action "lambda:InvokeFunction" \
+    --principal events.amazonaws.com \
+    --source-arn "arn:aws:events:us-east-1:211635102441:rule/TenderCleanupSchedule"
 ```
 
-## ⚙️ Configuration (Environment Variables)
+### 🧪 Testing Your Deployment
 
-| Variable | Required | Description | Example Value |
-|----------|----------|-------------|---------------|
-| `DB_ENDPOINT` | ✅ Yes | RDS SQL Server hostname | `tender-cleanup.cluster-xxx.rds.amazonaws.com` |
-| `DB_NAME` | ✅ Yes | Target database name | `tendertool_production` |
-| `DB_USER` | ✅ Yes | Cleanup service account | `CleanupAppUser` |
-| `DB_PASSWORD` | ✅ Yes | Service account password | `[SecurePassword123!]` |
+After deployment, test the function:
 
-> 🔐 **Security Best Practice**: Store `DB_PASSWORD` in AWS Secrets Manager for enhanced security!
+```bash
+# Test via AWS CLI
+aws lambda invoke \
+    --function-name TenderCleanupHandler \
+    --payload '{}' \
+    response.json
+
+# Check the response
+cat response.json
+```
+
+#### Expected Success Response:
+```json
+{
+    "statusCode": 200,
+    "body": {
+        "message": "Cleanup completed successfully",
+        "recordsDeleted": 42,
+        "executionTime": "1.23 seconds"
+    }
+}
+```
+
+#### Expected Success Indicators:
+- ✅ Function executes without errors
+- ✅ CloudWatch logs show successful database connection
+- ✅ Records are deleted from the database
+- ✅ No timeout or memory errors
+- ✅ Proper cleanup metrics in logs
+
+### 🔍 Monitoring and Maintenance
+
+#### CloudWatch Metrics to Monitor:
+- **Duration**: Function execution time
+- **Error Rate**: Failed cleanup operations
+- **Memory Utilization**: RAM usage during database operations
+- **Database Connections**: Monitor RDS connection metrics
+
+#### Log Analysis:
+```bash
+# View recent logs
+aws logs tail /aws/lambda/TenderCleanupHandler --follow
+
+# Search for successful cleanups
+aws logs filter-log-events \
+    --log-group-name /aws/lambda/TenderCleanupHandler \
+    --filter-pattern "Cleanup completed successfully"
+
+# Search for database connection issues
+aws logs filter-log-events \
+    --log-group-name /aws/lambda/TenderCleanupHandler \
+    --filter-pattern "Database connection"
+```
+
+### 🚨 Troubleshooting Deployments
+
+<details>
+<summary><strong>Analytics Layer Dependencies Missing</strong></summary>
+
+**Issue**: Database connectivity packages not available
+
+**Solution**: Ensure analytics layer is properly created and attached:
+```bash
+# For SAM: Verify layer directory exists and contains packages
+ls -la analytics-layer/python/
+ls -la analytics-layer/python/pymssql/
+
+# For manual deployment: Create and upload layer separately
+```
+</details>
+
+<details>
+<summary><strong>Database Connection Failures</strong></summary>
+
+**Issue**: Cannot connect to RDS SQL Server
+
+**Solution**: Verify database configuration and credentials:
+- Check DB_ENDPOINT points to correct RDS instance
+- Verify CleanupAppUser exists and has correct password
+- Ensure RDS security groups allow Lambda access
+- Check VPC configuration if Lambda is in VPC
+</details>
+
+<details>
+<summary><strong>Environment Variables Not Set</strong></summary>
+
+**Issue**: Missing database configuration
+
+**Solution**: Set environment variables using AWS CLI:
+```bash
+aws lambda update-function-configuration \
+    --function-name TenderCleanupHandler \
+    --environment Variables='{
+        "DB_ENDPOINT":"tender-tool-db.c2hq4seoidxc.us-east-1.rds.amazonaws.com",
+        "DB_NAME":"tendertool_db",
+        "DB_USER":"CleanupAppUser",
+        "DB_PASSWORD":"T3nder$Tool_DB_2025!"
+    }'
+```
+</details>
+
+<details>
+<summary><strong>Workflow Deployment Fails</strong></summary>
+
+**Issue**: GitHub Actions workflow errors
+
+**Solution**: 
+- Check repository secrets are correctly configured
+- Verify the target Lambda function exists in AWS
+- Ensure workflow has correct function ARN
+</details>
+
+<details>
+<summary><strong>Permission Denied Errors</strong></summary>
+
+**Issue**: CleanupAppUser lacks database permissions
+
+**Solution**: Grant required permissions:
+```sql
+USE tendertool_db;
+GRANT DELETE ON dbo.BaseTender TO CleanupAppUser;
+GRANT SELECT ON dbo.BaseTender TO CleanupAppUser;
+```
+</details>
+
+Choose the deployment method that best fits your development workflow and infrastructure requirements. SAM deployment is recommended for development environments, while workflow deployment excels for production maintenance schedules.
 
 ## 🚀 Usage
 
