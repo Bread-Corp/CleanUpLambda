@@ -1,0 +1,61 @@
+# This AWS SAM template has been generated from your function's configuration. If
+# your function has one or more triggers, note that the AWS resources associated
+# with these triggers aren't fully specified in this template and include
+# placeholder values. Open this template in AWS Infrastructure Composer or your
+# favorite IDE and modify it to specify a serverless application with other AWS
+# resources.
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: An AWS Serverless Application Model template describing your function.
+Resources:
+  TenderCleanupHandler:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Description: >-
+        Scheduled function to delete tenders from BaseTender whose closing date
+        was over a month ago. Relies on DB cascade deletes.
+      MemorySize: 128
+      Timeout: 60
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+      EphemeralStorage:
+        Size: 512
+      Environment:
+        Variables:
+          DB_ENDPOINT: tender-tool-db.c2hq4seoidxc.us-east-1.rds.amazonaws.com
+          DB_NAME: tendertool_db
+          DB_PASSWORD: T3nder$Tool_DB_2025!
+          DB_USER: CleanupAppUser
+      EventInvokeConfig:
+        MaximumEventAgeInSeconds: 21600
+        MaximumRetryAttempts: 2
+      Layers:
+        - !Ref Layer1
+      PackageType: Zip
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+      RecursiveLoop: Terminate
+      SnapStart:
+        ApplyOn: None
+      RuntimeManagementConfig:
+        UpdateRuntimeOn: Auto
+  # This resource represents your Layer with name analytics-layer. To download
+# the content of your Layer, go to
+# 
+# aws.amazon.com/go/view?arn=arn%3Aaws%3Alambda%3Aus-east-1%3A211635102441%3Alayer%3Aanalytics-layer%3A2&source=lambda
+  Layer1:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      ContentUri: ./analytics-layer
+      LayerName: analytics-layer
+      CompatibleRuntimes:
+        - python3.9
